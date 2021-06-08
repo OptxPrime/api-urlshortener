@@ -8,6 +8,32 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 
+//Import the mongoose module
+var mongoose = require('mongoose');
+
+//Set up default mongoose connection
+var mongoDB = 'mongodb://localhost:27017/local';
+mongoose.connect(mongoDB, { useNewUrlParser: true, useUnifiedTopology: true });
+
+//Get the default connection
+var db = mongoose.connection;
+
+//Bind connection to error event (to get notification of connection errors)
+db.on('error', console.error.bind(console, 'MongoDB connection error:'));
+
+var ObjectId = require('mongodb').ObjectID;
+
+var Schema = mongoose.Schema;
+
+var urlSchema = new Schema({
+  original_url: String,
+  // shortu_url: String
+});
+
+
+var Url = mongoose.model('Url', urlSchema);
+
+
 // Basic Configuration
 const port = process.env.PORT || 3000;
 
@@ -24,18 +50,8 @@ app.get('/api/hello', function (req, res) {
   res.json({ greeting: 'hello API' });
 });
 
-var dokle = 0;
 var spasene = []
 
-function validURL(str) {
-  var pattern = new RegExp('^(https?:\\/\\/)?' + // protocol
-    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain name
-    '((\\d{1,3}\\.){3}\\d{1,3}))' + // OR ip (v4) address
-    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port and path
-    '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
-    '(\\#[-a-z\\d_]*)?$', 'i'); // fragment locator
-  return !!pattern.test(str);
-}
 
 function isValidHttpUrl(string) {
   let url;
@@ -50,20 +66,34 @@ function isValidHttpUrl(string) {
 }
 
 app.post('/api/shorturl', function (req, res) {
-  //console.log( req.body );
+
   if (!isValidHttpUrl(req.body.url)) {
     res.json({ 'error': 'invalid url' })
   }
-  const stranica = spasene.find(el => el.original_url === req.body.url);
-  //console.log(stranica);
-  if (stranica)
-    res.json({ "original_url": req.body.url, "short_url": stranica.short_url })
-  else {
-    var obj = { "original_url": req.body.url, "short_url": dokle };
-    spasene.push(obj);
-    res.json(obj);
-    dokle++;
-  }
+
+  //const stranica = spasene.find(el => el.original_url === req.body.url);
+
+
+  Url.find({ 'original_url': req.body.url }, function (err, athletes) {
+    if (err) return handleError(err);
+    if (athletes.length > 0)
+      res.json({ "original_url": req.body.url, "short_url": athletes[0]._id });
+    else {
+      var instanca_url = new Url({ original_url: req.body.url });
+
+      // Save the new model instance, passing a callback
+      instanca_url.save(function (err, data) {
+        if (err) return handleError(err);
+
+        res.json({ "original_url": req.body.url, "short_url": data._id });
+
+      });
+
+    }
+
+  });
+
+
 });
 
 
@@ -71,18 +101,15 @@ app.post('/api/shorturl', function (req, res) {
 
 
 app.get('/api/shorturl/:url?', function (req, res) {
-  console.log(req.params.url);
   var short = req.params.url;
-  var original = spasene.find(el => el.short_url == short);
-  //console.log(original.original_url);
-  //res.json( {"originalni" :  original.original_url } );
-  // res.redirect('http://'+ original.original_url);
-  res.redirect(original.original_url);
+
+  Url.findById(short, function (err, data) {
+    if (err)
+      return handleError(err);
+    //console.log(data.original_url);
+    res.redirect(data.original_url);
+  });
 });
-
-
-
-
 
 
 
